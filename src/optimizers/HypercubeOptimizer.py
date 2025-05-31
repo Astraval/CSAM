@@ -1,5 +1,6 @@
 import torch.nn
 
+from src.cert import Safebox
 from src.optimizers.ConstrainedVolumeOptimizer import ConstrainedVolumeOptimizer
 
 
@@ -8,8 +9,7 @@ class HypercubeOptimizer(ConstrainedVolumeOptimizer):
         super().__init__(model)
 
     def set_volume_constrain(self, volume: float):
-        pass  # TODO: implement
+        Safebox.assign_epsilon(self._interval_model, volume)
 
-    def train(self, train_dataset: torch.utils.data.Dataset, val_dataset: torch.utils.data.Dataset, loss_obj: float,
-              max_iters: int = 100, batch_size: int = 64, lr: float = 1e-4):
-        pass  # TODO: implement
+    def step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> float:
+        pass
