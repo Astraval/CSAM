@@ -1,12 +1,12 @@
 import torch.nn
 
 from src.cert import Safebox
-from src.optimizers.ConstrainedVolumeOptimizer import ConstrainedVolumeOptimizer
+from src.optimizers.ConstrainedVolumeTrainer import ConstrainedVolumeTrainer
 
 
-class HypercubeOptimizer(ConstrainedVolumeOptimizer):
-    def __init__(self, model: torch.nn.Sequential):
-        super().__init__(model)
+class HypercubeTrainer(ConstrainedVolumeTrainer):
+    def __init__(self, model: torch.nn.Sequential, device: str = "cpu"):
+        super().__init__(model, device=device)
         self._optimizer = None
 
     def _set_volume_constrain(self, volume: float):
@@ -17,7 +17,7 @@ class HypercubeOptimizer(ConstrainedVolumeOptimizer):
               val_dataset: torch.utils.data.Dataset,
               loss_obj: float, max_iters: int = 100, batch_size: int = 64, lr: float = 1e-4, **kwargs):
         for layer in self._interval_model:
-            if not isinstance(layer, Safebox.BFlatten):
+            if isinstance(layer, Safebox.BDense) or isinstance(layer, Safebox.BConv2d):
                 layer.W_c.requires_grad = True  # only enable to center updates
                 layer.b_c.requires_grad = True
                 layer.W_u.requires_grad = False
@@ -26,7 +26,7 @@ class HypercubeOptimizer(ConstrainedVolumeOptimizer):
                 layer.b_l.requires_grad = False
 
         self._optimizer = torch.optim.Adam(
-            filter(lambda param: param.require_grad, self._interval_model.parameters()), lr=lr
+            filter(lambda param: param.requires_grad, self._interval_model.parameters()), lr=lr
         )  # only chose centers in optimizer
         self._optimizer.zero_grad()
         super().train(

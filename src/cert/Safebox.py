@@ -74,15 +74,17 @@ class BDense(nn.Module):
 class BConv2d(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         super(BConv2d, self).__init__()
+        if isinstance(kernel_size, int):
+            kernel_size = (kernel_size, kernel_size)
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
 
-        self.W_c = nn.Parameter(torch.zeros(out_channels, in_channels, kernel_size, kernel_size))
-        self.W_u = nn.Parameter(torch.zeros(out_channels, in_channels, kernel_size, kernel_size))
-        self.W_l = nn.Parameter(torch.zeros(out_channels, in_channels, kernel_size, kernel_size))
+        self.W_c = nn.Parameter(torch.zeros(out_channels, in_channels, *kernel_size))
+        self.W_u = nn.Parameter(torch.zeros(out_channels, in_channels, *kernel_size))
+        self.W_l = nn.Parameter(torch.zeros(out_channels, in_channels, *kernel_size))
 
         self.b_c = nn.Parameter(torch.zeros(out_channels))
         self.b_u = nn.Parameter(torch.zeros(out_channels))
@@ -97,25 +99,38 @@ class BConv2d(nn.Module):
         return self.W_c.shape[0] * self.W_c.shape[1] * self.W_c.shape[2] * self.W_c.shape[3]
 
     def forward(self, X):
+        """
+        Borrowed directly from
+        https://github.com/matthewwicker/RobustExplanationConstraintsForNeuralNetworks/blob/master/GradCertModule.py
+        with explicit permission of the author. All rights reserved.
+        """
         X_l, X_u = torch.unbind(X, dim=-1)
-        X_mu = (X_u + X_l) / 2
-        X_r = (X_u - X_l) / 2
+        x_mu = (X_u + X_l) / 2
+        x_r = (X_u - X_l) / 2
 
-        bias_upper = self.b_c + self.b_u
-        bias_lower = self.b_c - self.b_l
-        h_mu = F.conv2d(X_mu, self.W_c, 0, self.stride, self.padding)
-        x_rad = F.conv2d(X_r, torch.abs(self.W_c), 0, self.stride, self.padding)
-        W_upper = F.conv2d(torch.abs(X_mu), self.W_u, 0, self.stride, self.padding)
-        W_lower = F.conv2d(torch.abs(X_mu), self.W_l, 0, self.stride, self.padding)
-        Quad_upper = F.conv2d(torch.abs(X_r), torch.abs(self.W_u), 0, self.stride, self.padding)
-        Quad_lower = F.conv2d(torch.abs(X_r), torch.abs(self.W_l), 0, self.stride, self.padding)
-        h_u = torch.add(torch.add(torch.add(torch.add(h_mu, x_rad), W_upper), Quad_upper), bias_upper)
-        h_l = torch.add(torch.subtract(torch.subtract(torch.subtract(h_mu, x_rad), W_lower), Quad_lower), bias_lower)
+        # W = torch.Tensor(W)
+        W_mu = ((self.W_c+self.W_u) + (self.W_c-self.W_l))/2
+        W_r = ((self.W_c + self.W_u) - (self.W_c - self.W_l)) / 2
 
-        return torch.stack((h_l, h_u), dim=2)
+        # https://discuss.pytorch.org/t/adding-bias-to-convolution-output/82684/5
+        b_size = self.b_c.shape[0]
+        b_u = torch.reshape(self.b_c + self.b_u, (1, b_size, 1, 1))
+        b_l = torch.reshape(self.b_c - self.b_l, (1, b_size, 1, 1))
+        h_mu = torch.nn.functional.conv2d(x_mu, W_mu, stride=self.stride, padding=self.padding)
+        x_rad = torch.nn.functional.conv2d(x_r, torch.abs(W_mu), stride=self.stride, padding=self.padding)
+        # assert((x_rad >= 0).all())
+        W_rad = torch.nn.functional.conv2d(torch.abs(x_mu), W_r, stride=self.stride, padding=self.padding)
+        # assert((W_rad >= 0).all())
+        Quad = torch.nn.functional.conv2d(torch.abs(x_r), torch.abs(W_r), stride=self.stride, padding=self.padding)
+        # assert((Quad >= 0).all())
+        h_u = torch.add(torch.add(torch.add(torch.add(h_mu, x_rad), W_rad), Quad), b_u)
+        h_l = torch.add(torch.subtract(torch.subtract(torch.subtract(h_mu, x_rad), W_rad), Quad), b_l)
+        assert ((h_u >= h_l).all())
+
+        return torch.stack((h_l, h_u), dim=-1)
 
 
-def replace_linear_with_dense(model):
+def _replace_layers_with_blayers(model):
     for name, child in model.named_children():
         if isinstance(child, nn.Linear):
             new_layer = BDense(child.in_features, child.out_features)
@@ -128,21 +143,35 @@ def replace_linear_with_dense(model):
             # Replace with Dense, preserving parameters
             setattr(model, name, new_layer)
         elif isinstance(child, nn.Conv2d):
-            print("Not implemented")
+            new_layer = BConv2d(
+                in_channels=child.in_channels,
+                out_channels=child.out_channels,
+                kernel_size=child.kernel_size,
+                stride=child.stride,
+                padding=child.padding
+            )
+            new_layer.W_c = nn.Parameter(child.weight.clone().detach())
+            new_layer.b_c = nn.Parameter(child.bias.clone().detach())
+            new_layer.W_l = nn.Parameter(torch.zeros_like(child.weight))
+            new_layer.W_u = nn.Parameter(torch.zeros_like(child.weight))
+            new_layer.b_l = nn.Parameter(torch.zeros_like(child.bias))
+            new_layer.b_u = nn.Parameter(torch.zeros_like(child.bias))
+            setattr(model, name, new_layer)
         elif isinstance(child, nn.Flatten):
-            continue
+            new_layer = BFlatten()
+            setattr(model, name, new_layer)
         elif isinstance(child, nn.ReLU):
             continue
         elif isinstance(child, nn.Softmax):
-            continue
+            raise NotImplementedError
         elif isinstance(child, nn.ModuleList):
             # Recursively apply to child modules
-            replace_linear_with_dense(child)
+            _replace_layers_with_blayers(child)
 
 
 def modelToBModel(model):
     model = copy.deepcopy(model)
-    replace_linear_with_dense(model)
+    _replace_layers_with_blayers(model)
     return model
 
 
@@ -172,11 +201,11 @@ def bmodelToModel(bmodel):
 
 def assign_epsilon(bmodel, epsilon: float):
     for layer in bmodel:
-        if isinstance(layer, BDense):
-            layer.W_u = nn.Parameter(torch.ones_like(layer.W_u) * epsilon)
-            layer.W_l = nn.Parameter(torch.ones_like(layer.W_l) * epsilon)
-            layer.b_u = nn.Parameter(torch.ones_like(layer.b_u) * epsilon)
-            layer.b_l = nn.Parameter(torch.ones_like(layer.b_l) * epsilon)
+        if isinstance(layer, BDense) or isinstance(layer, BConv2d):
+            layer.W_u.data.copy_(torch.ones_like(layer.W_u) * epsilon)
+            layer.W_l.data.copy_(torch.ones_like(layer.W_l) * epsilon)
+            layer.b_u.data.copy_(torch.ones_like(layer.b_u) * epsilon)
+            layer.b_l.data.copy_(torch.ones_like(layer.b_l) * epsilon)
 
 
 def max_loss(y_true: torch.Tensor, y_pred: torch.Tensor):

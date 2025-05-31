@@ -7,11 +7,12 @@ from tqdm import tqdm
 from src.cert import Safebox
 
 
-class ConstrainedVolumeOptimizer(ABC):
-    def __init__(self, model: torch.nn.Sequential, quiet: bool = False):
+class ConstrainedVolumeTrainer(ABC):
+    def __init__(self, model: torch.nn.Sequential, quiet: bool = False, device: str ="cpu"):
         self._current_volume = None
         self._interval_model: torch.nn.Sequential = Safebox.modelToBModel(model)
         self._quiet = quiet
+        self._device = device
 
     @abstractmethod
     def _set_volume_constrain(self, volume: float):
@@ -19,6 +20,7 @@ class ConstrainedVolumeOptimizer(ABC):
 
     def set_volume_constrain(self, volume: float):
         self._current_volume = volume
+        self._set_volume_constrain(volume)
 
     def _print(self, *messages, **kwargs):
         if not self._quiet:
@@ -30,7 +32,7 @@ class ConstrainedVolumeOptimizer(ABC):
               loss_obj: float, max_iters: int = 100,
               batch_size: int = 64, lr: float = 1e-4, **kwargs) -> torch.nn.Sequential:
         self._interval_model.train()
-        dataloader = torch.utils.data.DataLoader(train_dataset, batch_size == batch_size, shuffle=True)
+        dataloader = torch.utils.data.DataLoader(train_dataset, batch_size = batch_size, shuffle=True)
         data_iter = iter(dataloader)
         progress_bar = tqdm(range(max_iters), disable=self._quiet)
         loss = 0
@@ -39,6 +41,7 @@ class ConstrainedVolumeOptimizer(ABC):
             if X is None:
                 data_iter = iter(dataloader)
                 X, y = next(data_iter)
+            X, y = X.to(self._device), y.to(self._device)
             loss = self.step(X, y, lr=lr, **kwargs)
             progress_bar.set_postfix({
                 "loss": round(loss, 4),
@@ -62,9 +65,10 @@ class ConstrainedVolumeOptimizer(ABC):
         with torch.no_grad():
             X = X.unsqueeze(-1)
             X = X.expand(*X.shape[:-1], 2)
+            X, y = X.to(self._device), y.to(self._device)
             y_pred = self._interval_model(X)
             min_acc = Safebox.min_acc(y, y_pred)
-        return min_acc
+        return min_acc.item()
 
     @abstractmethod
     def step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> float:
