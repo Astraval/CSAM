@@ -10,20 +10,14 @@ from src.optimizers.Trainer import Trainer
 
 class ConstrainedVolumeTrainer(Trainer, ABC):
     def __init__(self, model: torch.nn.Sequential, quiet: bool = False, device: str = "cpu"):
+        super().__init__(quiet=quiet, device=device)
         self._current_val_dataset = None
-        self._current_volume = None
         self._interval_model: torch.nn.Sequential = Safebox.modelToBModel(model)
         self._interval_model = self._interval_model.to(device)
-        self._quiet = quiet
-        self._device = device
 
     @abstractmethod
-    def _set_volume_constrain(self, volume: float):
+    def set_volume_constrain(self, epsilon: float):
         raise NotImplementedError
-
-    def set_volume_constrain(self, volume: float):
-        self._current_volume = volume
-        self._set_volume_constrain(volume)
 
     def _print(self, *messages, **kwargs):
         if not self._quiet:

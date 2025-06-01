@@ -30,6 +30,11 @@ def get_mnist_dataset(root: str = './data') -> (Dataset, Dataset):
     val_dataset = torchvision.datasets.MNIST(root=root, train=False, download=True, transform=_TRANSFORM)
     return train_dataset, val_dataset
 
+def get_svhn_dataset(root: str = './data') -> (Dataset, Dataset):
+    train_dataset = torchvision.datasets.SVHN(root=root, train=True, download=True, transform=_TRANSFORM)
+    val_dataset = torchvision.datasets.SVHN(root=root, train=False, download=True, transform=_TRANSFORM)
+    return train_dataset, val_dataset
+
 
 def reduce_dataset(dataset: Dataset, num_samples: int) -> Dataset:
     if num_samples > len(dataset):

@@ -5,12 +5,12 @@ from src.optimizers.ConstrainedVolumeTrainer import ConstrainedVolumeTrainer
 
 
 class HypercubeTrainer(ConstrainedVolumeTrainer):
-    def __init__(self, model: torch.nn.Sequential, device: str = "cpu"):
-        super().__init__(model, device=device)
+    def __init__(self, model: torch.nn.Sequential, device: str = "cpu", quiet: bool = False):
+        super().__init__(model, device=device, quiet=quiet)
         self._optimizer = None
 
-    def _set_volume_constrain(self, volume: float):
-        Safebox.assign_epsilon(self._interval_model, volume)
+    def set_volume_constrain(self, epsilon: float):
+        Safebox.assign_epsilon(self._interval_model, epsilon)
 
     def train(self,
               train_dataset: torch.utils.data.Dataset,
