@@ -1,5 +1,5 @@
 from typing import Callable
-
+from tqdm import tqdm
 import torch
 
 
@@ -14,8 +14,13 @@ def evaluate_accuracy(dataset: torch.utils.data.Dataset, model: torch.nn.Sequent
 
 def evaluate_run(run: Callable[[], list[float]], n_runs: int) -> (list[float], list[float]):
     run_statistics = []
-    for i in range(n_runs):
-        run_statistics.append(run())
+    progress_bar = tqdm(range(n_runs))
+    for i in progress_bar:
+        values = run()
+        run_statistics.append(values)
+        progress_bar.set_postfix({
+            "Current Values " : values
+        })
     run_statistics = torch.tensor(run_statistics)
     means = run_statistics.mean(dim=0)
     stds = run_statistics.std(dim=0)
