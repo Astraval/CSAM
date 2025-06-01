@@ -5,12 +5,15 @@ import torch.nn
 from tqdm import tqdm
 
 from src.cert import Safebox
+from src.optimizers.Trainer import Trainer
 
 
-class ConstrainedVolumeTrainer(ABC):
-    def __init__(self, model: torch.nn.Sequential, quiet: bool = False, device: str ="cpu"):
+class ConstrainedVolumeTrainer(Trainer, ABC):
+    def __init__(self, model: torch.nn.Sequential, quiet: bool = False, device: str = "cpu"):
+        self._current_val_dataset = None
         self._current_volume = None
         self._interval_model: torch.nn.Sequential = Safebox.modelToBModel(model)
+        self._interval_model = self._interval_model.to(device)
         self._quiet = quiet
         self._device = device
 
@@ -32,29 +35,15 @@ class ConstrainedVolumeTrainer(ABC):
               loss_obj: float, max_iters: int = 100,
               batch_size: int = 64, lr: float = 1e-4, **kwargs) -> torch.nn.Sequential:
         self._interval_model.train()
-        dataloader = torch.utils.data.DataLoader(train_dataset, batch_size = batch_size, shuffle=True)
-        data_iter = iter(dataloader)
-        progress_bar = tqdm(range(max_iters), disable=self._quiet)
-        loss = 0
-        for _ in progress_bar:
-            X, y = next(data_iter, (None, None))
-            if X is None:
-                data_iter = iter(dataloader)
-                X, y = next(data_iter)
-            X, y = X.to(self._device), y.to(self._device)
-            loss = self.step(X, y, lr=lr, **kwargs)
-            progress_bar.set_postfix({
-                "loss": round(loss, 4),
-                "min_val_acc": round(self._evaluate_min_val_acc(val_dataset), 4)
-            })
-            self._interval_model.train()
-            if loss < loss_obj:
-                self._print("Loss objective reached. Stop training.")
-                break
-        self._print("-" * 10,
-                    f" Training with volume parameter constrain {round(self._current_volume, 4)} completed with loss  "
-                    f"{round(loss)}",
-                    "-" * 10)
+        self._current_val_dataset=val_dataset
+        return super().train(
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            loss_obj=loss_obj, max_iters=max_iters,
+            batch_size=batch_size, lr=lr, **kwargs
+        )
+
+    def result(self) -> torch.nn.Sequential:
         return copy.deepcopy(self._interval_model)
 
     def _evaluate_min_val_acc(self,
@@ -70,6 +59,12 @@ class ConstrainedVolumeTrainer(ABC):
             min_acc = Safebox.min_acc(y, y_pred)
         return min_acc.item()
 
+    def step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> (float, dict[str, float]):
+        self._interval_model.train()
+        loss, infos = self._optimize_step(X, y, lr=lr, **kwargs)
+        min_acc = round(self._evaluate_min_val_acc(self._current_val_dataset, 64), 4)
+        return loss, {"min_val_acc": min_acc} | infos
+
     @abstractmethod
-    def step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> float:
+    def _optimize_step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> (float, dict[str, float]):
         raise NotImplementedError

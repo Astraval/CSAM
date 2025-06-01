@@ -33,7 +33,7 @@ class HypercubeTrainer(ConstrainedVolumeTrainer):
             train_dataset, val_dataset, loss_obj, max_iters=max_iters, batch_size=batch_size, lr=lr, **kwargs
         )
 
-    def step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> float:
+    def _optimize_step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> (float, dict[str, float]):
         self._optimizer.zero_grad()
         self._interval_model.zero_grad()
         self._interval_model.train()
@@ -43,4 +43,4 @@ class HypercubeTrainer(ConstrainedVolumeTrainer):
         max_loss = Safebox.max_loss(y, y_pred)
         max_loss.backward()
         self._optimizer.step()
-        return max_loss.item()
+        return max_loss.item(), {}

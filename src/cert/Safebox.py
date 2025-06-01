@@ -175,27 +175,33 @@ def modelToBModel(model):
     return model
 
 
-def replace_dense_with_linear(model):
+def _replate_blayers_with_layers(model):
     for name, child in model.named_children():
         if isinstance(child, BDense):
             new_layer = nn.Linear(child.in_features, child.out_features)
-            new_layer.weight = nn.Parameter(child.W_c.clone().detach())
-            new_layer.bias = nn.Parameter(child.b_c.clone().detach())
+            new_layer.weight.data.copy_(child.W_c.clone().detach())
+            new_layer.bias.data.copy_(child.b_c.clone().detach())
             setattr(model, name, new_layer)
-        elif isinstance(child, nn.Flatten):
-            continue
+        elif isinstance(child, BFlatten):
+            new_layer = nn.Flatten(start_dim=1, end_dim=-1)
+            setattr(model, name, new_layer)
         elif isinstance(child, nn.ReLU):
             continue
         elif isinstance(child, nn.Softmax):
             continue
         elif isinstance(child, nn.ModuleList):
             # Recursively apply to child modules
-            replace_dense_with_linear(child)
+            _replate_blayers_with_layers(child)
+        elif isinstance(child, BConv2d):
+            new_layer = nn.Conv2d(child.in_channels, child.out_channels, child.kernel_size, child.stride, child.padding)
+            new_layer.weight.data.copy_(child.W_c.clone().detach())
+            new_layer.bias.data.copy_(child.b_c.clone().detach())
+            setattr(model, name, new_layer)
 
 
 def bmodelToModel(bmodel):
     bmodel = copy.deepcopy(bmodel)
-    replace_dense_with_linear(bmodel)
+    _replate_blayers_with_layers(bmodel)
     return bmodel
 
 
