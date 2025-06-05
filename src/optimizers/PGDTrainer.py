@@ -3,7 +3,7 @@ import torch
 from src.optimizers.Trainer import Trainer
 from src.optimizers.sam import SAM
 from src.utils.evaluation import evaluate_accuracy
-from src.optimizers.PGD_attack import pgd_attack
+from src.optimizers.PGDAttack import pgd_attack
 
 class PGDTrainer(Trainer):
     def __init__(self, model: torch.nn.Sequential, quiet: bool = False, device: str = "cpu"):
@@ -29,7 +29,7 @@ class PGDTrainer(Trainer):
             max_iters=max_iters,
             epsilon = epsilon,
             alpha = alpha,
-            num_iters = num_iters
+            num_iters = num_iters,
             **kwargs
         )
     
@@ -37,11 +37,13 @@ class PGDTrainer(Trainer):
         self._model.train()
         self._model.zero_grad()
         self._optimizer.zero_grad()
-        x_adv = pgd_attack(self._model, X, y,)
+        x_adv = pgd_attack(self._model, X, y,epsilon,alpha,num_iters)
         y_pred = self._model(x_adv)
         loss = torch.nn.CrossEntropyLoss()(y_pred, y)
         loss.backward()
         self._optimizer.step()
+        accuracy = self._evaluate_accuracy()
+        return loss.item(), {"val_acc":round(accuracy, 4)}
 
     def result(self) -> torch.nn.Sequential:
         return copy.deepcopy(self._model)
