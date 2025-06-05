@@ -3,7 +3,6 @@ import torch
 from src.optimizers.Trainer import Trainer
 from src.optimizers.sam import SAM
 from src.utils.evaluation import evaluate_accuracy
-from src.optimizers.PGDAttack import pgd_attack
 
 class PGDTrainer(Trainer):
     def __init__(self, model: torch.nn.Sequential, quiet: bool = False, device: str = "cpu"):
@@ -32,12 +31,27 @@ class PGDTrainer(Trainer):
             num_iters = num_iters,
             **kwargs
         )
+
+    def _pgd_attack(self, model: torch.nn, x: torch.Tensor, y: torch.Tensor, epsilon: float, alpha: float, num_iter,
+                   clamp_min: float = -1, clamp_max: float = 1):
+        x_adv = x.clone().detach().requires_grad_(True)
+        for iter in range(num_iter):
+            output = model(x_adv)
+            loss = torch.nn.functional.cross_entropy(output, y)
+            loss.backward()
+            with torch.no_grad():
+                x_adv += alpha * x_adv.grad.sign()
+                x_adv = torch.max(torch.min(x_adv, x + epsilon),
+                                  x - epsilon)  # if x_adv is outside of the ball, set it to the boundary of the ball so that x_adv belongs to [x-epsilon, x+epsilion]
+                x_adv = torch.clamp(x_adv, clamp_min, clamp_max)
+            x_adv = x_adv.clone().detach().requires_grad_(True)
+        return x_adv
     
     def step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, epsilon: float = 0.3, alpha: float =0.01, num_iters: int = 10, **kwargs) -> (float, dict[str, float]):
         self._model.train()
         self._model.zero_grad()
         self._optimizer.zero_grad()
-        x_adv = pgd_attack(self._model, X, y,epsilon,alpha,num_iters)
+        x_adv = self._pgd_attack(self._model, X, y,epsilon,alpha,num_iters)
         y_pred = self._model(x_adv)
         loss = torch.nn.CrossEntropyLoss()(y_pred, y)
         loss.backward()
