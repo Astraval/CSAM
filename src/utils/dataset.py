@@ -5,7 +5,7 @@ from torchvision.transforms import transforms
 
 _TRANSFORM = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.5], std=[0.5])
+    #transforms.Normalize(mean=[0.5], std=[0.5])
 ])
 
 
@@ -41,3 +41,11 @@ def reduce_dataset(dataset: Dataset, num_samples: int) -> Dataset:
         raise AttributeError
     indices = torch.randperm(len(dataset))[:num_samples]
     return Subset(dataset, indices)
+
+def split_dataset(dataset: Dataset, split_proportion: float = 0.8) -> tuple[Dataset, Dataset]:
+    indices = torch.randperm(len(dataset))
+    dataset1_indices, dataset2_indices = (
+        indices[:int(len(dataset)*split_proportion)], indices[int(len(dataset)*split_proportion):]
+    )
+    return Subset(dataset, dataset1_indices), Subset(dataset, dataset2_indices)
+

@@ -13,7 +13,7 @@ class MultiphaseTrainer:
         self._quiet = quiet
 
     @abstractmethod
-    def train(self, *trainer_args,**trainer_kwargs):
+    def train(self, *trainer_args,**trainer_kwargs) -> bool:
         raise NotImplementedError
 
     def _print(self, *messages, **kwargs):
