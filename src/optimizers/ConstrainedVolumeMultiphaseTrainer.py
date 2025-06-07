@@ -38,7 +38,7 @@ class ConstrainedVolumeMultiphaseTrainer(MultiphaseTrainer):
             n_phases -= 1
             self._volume_interval = (self._starting_value, None)
             self._next_volume = self._inflate_function(self._starting_value)
-            self._best_model = copy.deepcopy(model)
+            self._best_model = copy.deepcopy(self._trainer.result())
             if acc < self._min_acc_limit:
                 self._print(f"Initial accuracy is below min accuracy threshold by {self._min_acc_limit-acc}. Training failed.")
                 return False
