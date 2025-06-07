@@ -40,7 +40,7 @@ class Trainer(ABC):
                 return True
             # interrupt training because of bad initialization
             if k > n_iter_eval_stop and loss > hard_min_loss_stop:
-                self._print("BAd Initialization detected. Interrupted Training.")
+                self._print("Bad Initialization detected. Interrupted Training.")
                 return False
 
         return True

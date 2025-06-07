@@ -5,7 +5,7 @@ def inflate_multiplier(multiplier: float):
     return inflate_func_mul
 
 
-def narrower_halver(half: float) -> float:
+def narrower_halver(half: float):
     def narrower_func_halver(interval_a: float, interval_b: float) -> float:
         return (interval_b - interval_a) * half + interval_a
 
