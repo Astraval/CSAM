@@ -54,7 +54,7 @@ class ConstrainedVolumeMultiphaseTrainer(MultiphaseTrainer):
             acc = evaluate_accuracy(val_dataset, model, num_samples=len(val_dataset))
             self._print(f"-> Center Accuracy is {acc}.")
             if acc > self._min_acc_limit:
-                self._best_model = copy.deepcopy(model)
+                self._best_model = copy.deepcopy(self._trainer.result())
                 self._print(f"-> Generalization is above minimum accuracy by {acc-self._min_acc_limit}.!")
                 if self._volume_interval[1] is None:
                     self._volume_interval = (self._next_volume, None)

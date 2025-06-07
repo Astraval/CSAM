@@ -48,7 +48,7 @@ class LagrangianTrainer(ConstrainedVolumeTrainer):
         )
 
         self._optimizer.zero_grad()
-        super().train(
+        return super().train(
             train_dataset, val_dataset, loss_obj, max_iters=max_iters, batch_size=batch_size, lr=lr, **kwargs
         )
 

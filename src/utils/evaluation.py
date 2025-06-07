@@ -25,7 +25,6 @@ def evaluate_fgsm_accuracy(dataset: torch.utils.data.Dataset, model: torch.nn.Se
     loss.backward()
     model.zero_grad()
     X_adv = X + X.grad.sign() * epsilon
-    print("coucou")
     X_adv = torch.clamp(X_adv, *data_domain)
     with torch.no_grad():
         logit_adv = model(X_adv)
@@ -42,19 +41,17 @@ def evaluate_certified_adv_accuracy(dataset: torch.utils.data.Dataset, model: to
     model = Safebox.modelToBModel(model)
     Safebox.assign_epsilon(model, 0.0)
     X = torch.stack([X - epsilon, X + epsilon], dim=-1).clamp(data_domain[0], data_domain[1])
-    return Safebox.min_acc(y, model(X))
+    return Safebox.min_acc(y, model(X)).item()
 
 
 
 def evaluate_run(run: Callable[[], list[float]], n_runs: int) -> (list[float], list[float], list[float]):
     run_statistics = []
-    progress_bar = tqdm(range(n_runs))
-    for i in progress_bar:
+    for i in range(n_runs):
+        print(f" ---------- Starting Run #{i} ---------- ")
         values = run()
         run_statistics.append(values)
-        progress_bar.set_postfix({
-            "Current Values ": values
-        })
+        print(f"-> Run finished with values : {values}")
     all_runs = run_statistics
     run_statistics = torch.tensor(run_statistics)
     means = run_statistics.mean(dim=0)

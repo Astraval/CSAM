@@ -5,7 +5,7 @@ from torchvision.transforms import transforms
 
 _TRANSFORM = transforms.Compose([
     transforms.ToTensor(),
-    #transforms.Normalize(mean=[0.5], std=[0.5])
+    transforms.Normalize(mean=[0.5], std=[0.5])
 ])
 
 
@@ -49,3 +49,14 @@ def split_dataset(dataset: Dataset, split_proportion: float = 0.8) -> tuple[Data
     )
     return Subset(dataset, dataset1_indices), Subset(dataset, dataset2_indices)
 
+def _extract_targets(dataset):
+    """
+    Extract the targets from a dataset of various types.
+    """
+    if hasattr(dataset, "targets"):
+        return dataset.targets.clone().detach()
+    if isinstance(dataset, torch.utils.data.TensorDataset):
+        return dataset.tensors[1]
+    if hasattr(dataset, "labels"):
+        return torch.tensor(dataset.labels)
+    raise AttributeError(f"Cannot extract targets from dataset of type {type(dataset)}")

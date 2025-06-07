@@ -29,7 +29,7 @@ class HypercubeTrainer(ConstrainedVolumeTrainer):
             filter(lambda param: param.requires_grad, self._interval_model.parameters()), lr=lr
         )  # only chose centers in optimizer
         self._optimizer.zero_grad()
-        super().train(
+        return super().train(
             train_dataset, val_dataset, loss_obj, max_iters=max_iters, batch_size=batch_size, lr=lr, **kwargs
         )
 

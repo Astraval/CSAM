@@ -29,7 +29,7 @@ class ConstrainedVolumeTrainer(Trainer, ABC):
               train_dataset: torch.utils.data.Dataset,
               val_dataset: torch.utils.data.Dataset,
               loss_obj: float, max_iters: int = 100,
-              batch_size: int = 64, lr: float = 1e-4, **kwargs) -> torch.nn.Sequential:
+              batch_size: int = 64, lr: float = 1e-4, **kwargs) -> bool:
         self._interval_model.train()
         self._current_val_dataset = val_dataset
         return super().train(

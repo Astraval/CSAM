@@ -17,7 +17,7 @@ class PGDTrainer(Trainer):
               val_dataset: torch.utils.data.Dataset,
               loss_obj: float, max_iters: int = 100,
               batch_size: int = 64, lr: float = 1e-4, epsilon: float = 0.3, alpha: float = 0.01, num_iters: int = 10,
-              data_domain: tuple[float] = (0.0, 1.0), **kwargs) -> torch.nn.Sequential:
+              data_domain: tuple[float] = (0.0, 1.0), **kwargs) -> bool:
         self._optimizer = torch.optim.Adam(self._model.parameters(), lr=lr)
         self._val_dataset = val_dataset
         return super().train(

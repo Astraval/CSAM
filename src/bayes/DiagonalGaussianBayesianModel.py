@@ -7,8 +7,8 @@ from src.bayes.BayesianModel import BayesianModel
 
 class DiagonalGaussianBayesianModel(BayesianModel):
     def __init__(self, mean_model: torch.nn.Module, std_params: list[torch.Tensor]):
-        self._mean_model = copy.deepcopy(mean_model)
-        self._std_params = [param.detach().clone() for param in std_params]
+        self._mean_model = copy.deepcopy(mean_model).cpu()
+        self._std_params = [param.detach().clone().cpu() for param in std_params]
 
     def sample(self, n_models: int) -> list[torch.nn.Module]:
         models = [copy.deepcopy(self._mean_model) for _ in range(n_models)]

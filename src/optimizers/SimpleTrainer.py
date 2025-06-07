@@ -7,9 +7,9 @@ from src.utils.evaluation import evaluate_accuracy
 
 
 class SimpleTrainer(Trainer):
-    def __init__(self, model: torch.nn.Sequential, quiet: bool = False, device: str = "cpu", acc_evalutation_steps: int= 60):
+    def __init__(self, model: torch.nn.Sequential, quiet: bool = False, device: str = "cpu", acc_evaluation_steps: int= 60):
         super().__init__(quiet=quiet, device=device)
-        self._acc_evalutation_steps = acc_evalutation_steps
+        self._acc_evaluation_steps = acc_evaluation_steps
         self._val_dataset = None
         self._optimizer: torch.optim.Optimizer | None = None
         self._model = copy.deepcopy(model).to(device)
@@ -22,7 +22,7 @@ class SimpleTrainer(Trainer):
               train_dataset: torch.utils.data.Dataset,
               val_dataset: torch.utils.data.Dataset,
               loss_obj: float, max_iters: int = 100,
-              batch_size: int = 64, lr: float = 1e-4, **kwargs) -> torch.nn.Sequential:
+              batch_size: int = 64, lr: float = 1e-4, **kwargs) -> bool:
         self._optimizer = torch.optim.Adam(self._model.parameters(), lr=lr)
         self._val_dataset = val_dataset
         return super().train(
@@ -51,9 +51,11 @@ class SimpleTrainer(Trainer):
         loss.backward()
         self._optimizer.step()
         if self._acc_wait_steps <= 0:
-            self._acc_wait_steps = self._acc_evalutation_steps
+            self._acc_wait_steps = self._acc_evaluation_steps
             self._current_acc = self._evaluate_accuracy(num_samples=len(self._val_dataset))
             if self._current_acc > self._best_acc:
                 self._best_acc = self._current_acc
                 self._best_model = copy.deepcopy(self._model)
+        else:
+            self._acc_wait_steps -= 1
         return loss.item(), {"val_acc":round(self._current_acc, 4)}

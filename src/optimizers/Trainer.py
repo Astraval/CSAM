@@ -16,29 +16,34 @@ class Trainer(ABC):
               train_dataset: torch.utils.data.Dataset,
               val_dataset: torch.utils.data.Dataset,
               loss_obj: float, max_iters: int = 100,
-              batch_size: int = 64, lr: float = 1e-4, **kwargs) -> torch.nn.Sequential:
+              batch_size: int = 64, lr: float = 1e-4, n_iter_eval_stop: int = 100,
+              hard_min_loss_stop: float = 2.2, **kwargs) -> bool:
         dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         data_iter = iter(dataloader)
         progress_bar = tqdm(range(max_iters), disable=self._quiet)
         loss = 0
-        for _ in progress_bar:
+        initial_loss = 0
+        for k in progress_bar:
             X, y = next(data_iter, (None, None))
             if X is None:
                 data_iter = iter(dataloader)
                 X, y = next(data_iter)
             X, y = X.to(self._device), y.to(self._device)
             loss, info_dict = self.step(X, y, lr=lr, **kwargs)
+            if k == 0:
+                initial_loss = loss
             progress_bar.set_postfix({
                                          "loss": round(loss, 4),
                                      } | info_dict)
             if loss < loss_obj:
                 self._print("Loss objective reached. Stop training.")
-                break
-        self._print("-" * 10,
-                    f" Training completed with loss  "
-                    f"{round(loss)}",
-                    "-" * 10)
-        return self.result()
+                return True
+            # interrupt training because of bad initialization
+            if k > n_iter_eval_stop and loss > hard_min_loss_stop:
+                self._print("BAd Initialization detected. Interrupted Training.")
+                return False
+
+        return True
 
     @abstractmethod
     def result(self) -> torch.nn.Sequential:
