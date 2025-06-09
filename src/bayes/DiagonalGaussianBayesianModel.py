@@ -10,7 +10,15 @@ class DiagonalGaussianBayesianModel(BayesianModel):
         self._mean_model = copy.deepcopy(mean_model).cpu()
         self._std_params = [param.detach().clone().cpu() for param in std_params]
 
+
     def sample(self, n_models: int) -> list[torch.nn.Module]:
+        """
+        Samples n_models from the posterior distribution.
+
+        :param n_models: number of models to sample.
+
+        :return: List of sampled models
+        """
         models = [copy.deepcopy(self._mean_model) for _ in range(n_models)]
         params_iterators = [iter(model.parameters()) for model in models]
         for mean_p, std_p in zip(self._mean_model.parameters(), self._std_params):

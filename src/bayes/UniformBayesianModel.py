@@ -6,11 +6,21 @@ from src.bayes.BayesianModel import BayesianModel
 
 
 class UniformBayesianModel(BayesianModel):
+    """
+    Represents a bayesian model with the post
+    """
     def __init__(self, mean_model: torch.nn.Module, params_bounds: list[torch.Tensor]):
         self._mean_model = copy.deepcopy(mean_model).cpu()
         self._params_bounds = [param.detach().clone().cpu() for param in params_bounds]
 
     def sample(self, n_models: int) -> list[torch.nn.Module]:
+        """
+        Samples n_models from the posterior distribution.
+
+        :param n_models: number of models to sample.
+
+        :return: List of sampled models
+        """
         models = [copy.deepcopy(self._mean_model) for _ in range(n_models)]
         params_iterators = [iter(model.parameters()) for model in models]
         for mean_p, bound_p in zip(self._mean_model.parameters(), self._params_bounds):
