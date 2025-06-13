@@ -10,9 +10,22 @@ from src.utils.evaluation import evaluate_accuracy
 
 
 class ConstrainedVolumeMultiphaseTrainer(MultiphaseTrainer):
+    """
+    Trainer for interval neural network models that adjusts the safe box volume in multiple phases.
+    """
     def __init__(self, trainer: ConstrainedVolumeTrainer, inflate_function: Callable[[float], float],
                  narrow_function: Callable[[float, float], float], starting_value: float, quiet: bool = False,
                  min_acc_limit: float = 0.8):
+        """Initializes the ConstrainedVolumeMultiphaseTrainer.
+
+        Args:
+            trainer (ConstrainedVolumeTrainer): The underlying trainer for each phase.
+            inflate_function (Callable[[float], float]): Function to increase the safe box volume.
+            narrow_function (Callable[[float, float], float]): Function to decrease (narrow) the safe box volume.
+            starting_value (float): Initial value for the safe box volume.
+            quiet (bool, optional): If True, suppresses training output. Defaults to False.
+            min_acc_limit (float, optional): Minimum required accuracy for a phase to be considered successful. Defaults to 0.8.
+        """
         super().__init__(trainer, quiet)
         self._inflate_function = inflate_function
         self._narrow_function = narrow_function
@@ -24,7 +37,19 @@ class ConstrainedVolumeMultiphaseTrainer(MultiphaseTrainer):
         self._best_model: torch.nn.Sequential | None = None
         self._min_acc_limit = min_acc_limit
 
+
     def train(self, n_phases: int, val_dataset: torch.utils.data.Dataset, *trainer_args, **trainer_kwargs):
+        """Runs the multiphase training process, adjusting the safe box volume at each phase.
+
+        Args:
+            n_phases (int): Number of phases to run.
+            val_dataset (torch.utils.data.Dataset): The validation dataset.
+            *trainer_args: Additional arguments for the underlying trainer's train method.
+            **trainer_kwargs: Additional keywords arguments for the underlying trainer's train method.
+
+        Returns:
+            bool: True if training succeeds and minimum accuracy is maintained, otherwise False.
+        """
         self._print("=" * 10, f"Started Multiphase Trainer for {n_phases} phases", "=" * 10)
         if not self._started:
             self._started = True
@@ -70,4 +95,9 @@ class ConstrainedVolumeMultiphaseTrainer(MultiphaseTrainer):
         return True
 
     def result(self) -> torch.nn.Sequential:
+        """Returns a copy of the best model found during training.
+
+        Returns:
+            torch.nn.Sequential: The best model.
+        """
         return copy.deepcopy(self._best_model)
