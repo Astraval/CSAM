@@ -9,6 +9,14 @@ class BFlatten(nn.Module):
         super(BFlatten, self).__init__()
 
     def forward(self, X):
+        """ Flatten a bounded tensor while keeping its intervals together
+
+        Args:
+            X : Input bounds.
+
+        Returns:
+            Bounds after flattening.
+        """
         X_l, X_u = torch.unbind(X, dim=-1)
         batch_size = 1
         if X_l.shape[0] is not None:
@@ -45,12 +53,30 @@ class BDense(nn.Module):
         )
 
     def task_safe_set_vol(self):
+        """
+
+        Returns:
+            product of interval widths
+        """
         return torch.prod(self.W_u + self.W_l) * torch.prod(self.b_u + self.b_l)
 
     def n_params(self):
+        """
+
+        Returns:
+            number of center parameters
+        """
         return self.W_c.shape[0] * self.W_c.shape[1] + self.b_c.shape[0]
 
     def forward(self, X):
+        """Propagate input bounds through the dense layer
+
+        Args:
+            X (torch.Tensor): Input bounds 
+
+        Returns:
+            torch,Tensor : Output bounds  
+        """
         X_l, X_u = torch.unbind(X, dim=-1)
         X_mu = (X_u + X_l) / 2
         X_r = (X_u - X_l) / 2
@@ -63,6 +89,7 @@ class BDense(nn.Module):
         lower = torch.mm(X_mu, W_mu.T) - M_w - M_z - Q + self.b_c - self.b_l
 
         upper = torch.mm(X_mu, W_mu.T) + M_w + M_z + Q + self.b_c + self.b_u
+
         return torch.stack((lower, upper), dim=2)
 
     def __repr__(self):
@@ -72,6 +99,11 @@ class BDense(nn.Module):
 
 
 class BConv2d(nn.Module):
+    """ 
+    This is a 2-D convolutional nn with interval weights and biases
+
+    
+    """
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
         super(BConv2d, self).__init__()
         if isinstance(kernel_size, int):
@@ -96,9 +128,14 @@ class BConv2d(nn.Module):
         )
 
     def n_params(self):
+        """
+        Returns:
+            Number of center parameters
+        """
         return self.W_c.shape[0] * self.W_c.shape[1] * self.W_c.shape[2] * self.W_c.shape[3]
 
     def forward(self, X):
+        
         """
         Borrowed directly from
         https://github.com/matthewwicker/RobustExplanationConstraintsForNeuralNetworks/blob/master/GradCertModule.py
@@ -131,6 +168,10 @@ class BConv2d(nn.Module):
 
 
 def _replace_layers_with_blayers(model):
+    """
+    Replace linear, convolutional and flatten layers with bounded versions
+
+    """
     for name, child in model.named_children():
         if isinstance(child, nn.Linear):
             new_layer = BDense(child.in_features, child.out_features)
@@ -170,12 +211,19 @@ def _replace_layers_with_blayers(model):
 
 
 def modelToBModel(model):
+    """
+    Returns a deep copy model with bounded layers inserted
+        
+    """
     model = copy.deepcopy(model)
     _replace_layers_with_blayers(model)
     return model
 
 
 def _replate_blayers_with_layers(model):
+    """
+    Replace bounded layers with classical not bounded layers
+    """
     for name, child in model.named_children():
         if isinstance(child, BDense):
             new_layer = nn.Linear(child.in_features, child.out_features)
@@ -200,6 +248,9 @@ def _replate_blayers_with_layers(model):
 
 
 def bmodelToModel(bmodel):
+    """
+    Returns a deep copy of the model with all the bounded layers replaced with classical layers
+    """
     bmodel = copy.deepcopy(bmodel)
     _replate_blayers_with_layers(bmodel)
     return bmodel
@@ -215,6 +266,15 @@ def assign_epsilon(bmodel, epsilon: float):
 
 
 def max_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
+    """Compute the worst-case cross entropy los, considering the interval predictions
+
+    Args:
+        y_true (torch.Tensor): truth labels
+        y_pred (torch.Tensor): predicted bounds raw scores
+
+    Returns:
+        torch.Tensor: loss value
+    """
     y_true = y_true.squeeze(dim=-1)
     y_true_one_hot = F.one_hot(y_true, num_classes=y_pred.shape[1]).float()
     pred_l, pred_u = torch.unbind(y_pred, dim=-1)
@@ -226,6 +286,13 @@ def max_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def min_acc(y_true: torch.Tensor, y_pred: torch.Tensor):
+    """Computes the minimum possible accuracy (in the worst case)
+
+    Args:
+        y_true (torch.Tensor): truth labels
+        y_pred (torch.Tensor): predicted bounds raw scores
+
+    """
     y_true = y_true.squeeze(dim=-1)
     y_true_one_hot = F.one_hot(y_true, num_classes=y_pred.shape[1]).float()
     pred_l, pred_u = torch.unbind(y_pred, dim=-1)
@@ -237,6 +304,14 @@ def min_acc(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def soft_min_acc(y_true: torch.Tensor, y_pred: torch.Tensor, T=10):
+    """version of min_acc using softmax with temperature scaling
+
+    Args:
+        y_true (torch.Tensor): truth labels
+        y_pred (torch.Tensor): predicted bounds raw scores
+        T (int, optional): Temperature scaling factor. Defaults to 10.
+
+    """
     y_true = y_true.squeeze(dim=-1)
     y_true_one_hot = F.one_hot(y_true, num_classes=y_pred.shape[1]).float()
     pred_l, pred_u = torch.unbind(y_pred, dim=-1)
@@ -251,6 +326,15 @@ def soft_min_acc(y_true: torch.Tensor, y_pred: torch.Tensor, T=10):
 
 
 def min_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
+    """Compute the best case cross-entropy loss
+
+    Args:
+        y_true (torch.Tensor): truth labels
+        y_pred (torch.Tensor): predicted bounds raw scores
+
+    Returns:
+        torch.Tensor: Loss value
+    """
     y_true = y_true.squeeze(dim=-1)
     y_true_one_hot = F.one_hot(y_true, num_classes=y_pred.shape[1]).float()
     pred_l, pred_u = torch.unbind(y_pred, dim=-1)
@@ -262,6 +346,13 @@ def min_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def max_acc(y_true: torch.Tensor, y_pred: torch.Tensor):
+    """Compute the maximum possible accuracy (in the best case)
+
+    Args:
+        y_true (torch.Tensor): truth labels
+        y_pred (torch.Tensor): predictor bounds raw scores
+
+    """
     y_true = y_true.squeeze(dim=-1)
     y_true_one_hot = F.one_hot(y_true, num_classes=y_pred.shape[1]).float()
     pred_l, pred_u = torch.unbind(y_pred, dim=-1)
@@ -273,6 +364,13 @@ def max_acc(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def soft_max_acc(y_true: torch.Tensor, y_pred: torch.Tensor):
+    """version of max_acc using softmax with temperature scaling
+
+    Args:
+        y_true (torch.Tensor): truth labels
+        y_pred (torch.Tensor): predicted bounds raw scores
+
+    """
     y_true = y_true.squeeze(dim=-1)
     y_true_one_hot = F.one_hot(y_true, num_classes=y_pred.shape[1]).float()
     pred_l, pred_u = torch.unbind(y_pred, dim=-1)
@@ -288,6 +386,9 @@ def soft_max_acc(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def get_num_model_params(bmodel):
+    """
+    Return the total number of parameters in a bounded interval model
+    """
     num_params = 0
     for layerB in bmodel:
         if hasattr(layerB, "W_c"):
@@ -298,6 +399,9 @@ def get_num_model_params(bmodel):
 
 
 def get_task_safe_set_size(bmodel):
+    """
+    Returns the sum of all deviations in the bounded model (how uncertain the bounded model is)
+    """
     devsum = 0
     for layerB in bmodel:
         if hasattr(layerB, "deviation_sum"):
@@ -306,6 +410,9 @@ def get_task_safe_set_size(bmodel):
 
 
 def get_task_safe_set_volume(bmodel):
+    """
+    Return the product of all deviations (the volume of the uncertainty)
+    """
     vol = 1
     for layerB in bmodel:
         if hasattr(layerB, "task_safe_set_vol"):
@@ -314,6 +421,12 @@ def get_task_safe_set_volume(bmodel):
 
 
 def copy_bounds(bmodel, target_model):
+    """Copies the interval bounds from a model of interest to a target model
+
+    Args:
+        bmodel : model of interest
+        target_model : target model that will receive the copied interval bounds values
+    """
     for target_layer, layerB in zip(bmodel, target_model):
         if isinstance(layerB, BDense):
             layerB.W_u.data.copy_(target_layer.W_u.clone().detach())
@@ -323,6 +436,9 @@ def copy_bounds(bmodel, target_model):
 
 
 def get_intersection(model: nn.Sequential, model2: nn.Sequential) -> nn.Sequential:
+    """
+    Takes 2 bounded interval models and return a new model whose intervals are the intersections of the intervals from both models
+    """
     out = copy.deepcopy(model2)
     for target_layer, layer in zip(out, model):
         if isinstance(target_layer, BDense):

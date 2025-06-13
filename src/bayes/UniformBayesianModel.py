@@ -7,7 +7,7 @@ from src.bayes.BayesianModel import BayesianModel
 
 class UniformBayesianModel(BayesianModel):
     """
-    Represents a bayesian model with the post
+    Represents a bayesian model where each parameter is uniformly distributed
     """
     def __init__(self, mean_model: torch.nn.Module, params_bounds: list[torch.Tensor]):
         self._mean_model = copy.deepcopy(mean_model).cpu()
