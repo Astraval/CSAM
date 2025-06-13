@@ -29,7 +29,6 @@ class CertifiedPostTrainer(SimpleTrainer):
 
 
     def step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> (float, dict[str, float]):
-        values = super().step(X, y, lr, **kwargs) #optimisation step
         """One optimisation step + projection back into the safe certified box.
 
         Args:
@@ -40,6 +39,7 @@ class CertifiedPostTrainer(SimpleTrainer):
 
         Returns a tuple containing the current batch loss and a dictionnary with the current validation accuracy
         """
+        values = super().step(X, y, lr, **kwargs)  # optimisation step
         # project back into certified box
         with torch.no_grad():
             for layerModel, layerBound in zip(self._model, self._bound_model):
