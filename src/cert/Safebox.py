@@ -1,5 +1,5 @@
 """
-This code has been provided by Professor Matthew Wicker at Imperial College London.
+This python file has been provided by Professor Matthew Wicker at Imperial College London.
 We conducted the experiments using this code for our IBP.
 We have Professor Wicker's official authorization to use his code.
 All rights reserved.
