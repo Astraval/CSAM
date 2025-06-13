@@ -36,7 +36,7 @@ class PGDTrainer(Trainer):
         Args:
             train_dataset (torch.utils.data.Dataset): The dataset used for training
             val_dataset (torch.utils.data.Dataset): The dataset used for validation
-            loss_obj (float): the target loss value to reach
+            loss_obj (float): The target loss value to reach
             max_iters (int, optional): Maximum number of training iterations. Defaults to 100.
             batch_size (int, optional): Number of samples per training batch. Defaults to 64.
             lr (float, optional): Learning rate for the optimizer. Defaults to 1e-4.
@@ -104,10 +104,16 @@ class PGDTrainer(Trainer):
         """Performs one adversarial training step using PGD and updates the model parameters.
 
         Args:
-            dict (_type_): _description_
+            X (torch.Tensor): Batch of input data.
+            y (torch.Tensor): Corresponding labels for the batch.
+            lr (float, optional): Learning rate for this step. Defaults to 1e-4.
+            epsilon (float, optional): Maximum perturbation for the PGD attack. Defaults to 0.3.
+            alpha (float, optional): Step size for the PGD attack. Defaults to 0.01.
+            num_iters (int, optional): Number of PGD steps. Defaults to 10.
+            data_domain (tuple[float], optional): Minimum and maximum values for input data. Defaults to (0.0, 1.0).
 
         Returns:
-            _type_: _description_
+            tuple: A tuple containing the batch loss and a dictionary with the current validation accuracy "val_acc".
         """
         self._model.train()
         self._model.zero_grad()

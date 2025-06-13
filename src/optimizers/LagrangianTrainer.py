@@ -9,17 +9,36 @@ from src.optimizers.volumes import VolumeFunction
 
 
 class LagrangianTrainer(ConstrainedVolumeTrainer):
+    """
+    This is a trainer for interval bounded neural network models using a Lagrangian optimizer
+    to implement a safe box volume constraint.
+    """
 
     def __init__(self,
                  model: torch.nn.Sequential,
                  volume_function: VolumeFunction,
                  device: str = "cpu", quiet: bool = False):
+        """
+        Initializes the LagrangianTrainer.
+
+        Args:
+            model (torch.nn.Sequential): The neural network model to be trained as an interval model.
+            volume_function (VolumeFunction): Function to compute the safe box volume.
+            device (str, optional): The device to use for training ('cpu' or 'cuda'). Defaults to "cpu".
+            quiet (bool, optional): If True, suppresses training output. Defaults to False.
+        """
         super().__init__(model, device=device, quiet=quiet)
         self._optimizer = None
         self._volume_function = volume_function
         self._min_volume: torch.Tensor | None = None
 
     def set_volume_constrain(self, epsilon: float):
+        """
+        Sets the interval length (epsilon) for all parameters and computes the minimum allowed volume.
+
+        Args:
+            epsilon (float): The length of the interval for all parameters.
+        """
         Safebox.assign_epsilon(self._interval_model, epsilon)
         self._min_volume = self._volume_function.compute_volume(self._interval_model).item()
 
@@ -27,6 +46,22 @@ class LagrangianTrainer(ConstrainedVolumeTrainer):
               train_dataset: torch.utils.data.Dataset,
               val_dataset: torch.utils.data.Dataset,
               loss_obj: float, max_iters: int = 100, batch_size: int = 64, lr: float = 1e-4, **kwargs):
+        """
+        Trains the interval model using the lagrangian optimizer from the class VolumeConstrainedIntervalMinimizer.
+
+        Args:
+            train_dataset (torch.utils.data.Dataset): The dataset used for training.
+            val_dataset (torch.utils.data.Dataset): The dataset used for validation.
+            loss_obj (float): The target loss value to reach or optimize.
+            max_iters (int, optional): Maximum number of training iterations. Defaults to 100.
+            batch_size (int, optional): Number of samples per training batch. Defaults to 64.
+            lr (float, optional): Learning rate for the optimizer. Defaults to 1e-4.
+            **kwargs: Additional keyword arguments for the training loop.
+
+        Returns:
+            bool: True if training completes successfully, otherwise False.
+        """
+
         for layer in self._interval_model:
             if isinstance(layer, Safebox.BDense) or isinstance(layer, Safebox.BConv2d):
                 layer.W_c.requires_grad = True  # only enable to center updates
@@ -53,6 +88,18 @@ class LagrangianTrainer(ConstrainedVolumeTrainer):
         )
 
     def _optimize_step(self, X: torch.Tensor, y: torch.Tensor, lr: float = 1e-4, **kwargs) -> (float, dict[str, float]):
+        """Performs one optimization step using the lagrangian optimizer.
+
+        Args:
+            X (torch.Tensor): Batch of input data.
+            y (torch.Tensor): Corresponding labels for the batch.
+            lr (float, optional): Learning rate for this step. Defaults to 1e-4.
+            **kwargs: Additional arguments if required.
+
+        Returns:
+            tuple: A tuple containing the batch max loss (float) 
+            and a dictionary with the current minimum certified validation accuracy and current volume of the safe box.
+        """
         self._interval_model.train()
         self._interval_model.zero_grad()
         self._optimizer.zero_grad()
@@ -80,7 +127,17 @@ class LagrangianTrainer(ConstrainedVolumeTrainer):
 
 
 class VolumeConstrainedIntervalMinimizer(cooper.ConstrainedMinimizationProblem):
+    """
+    Defines the constrained minimization problem to ensure a minimum safe box volume using the cooper library.
+    """
     def __init__(self, volume_threshold: torch.Tensor, volume_function: VolumeFunction, device: str):
+        """initializes the constrained minimization problem
+
+        Args:
+            volume_threshold (torch.Tensor): This is the minimum allowed volume for the safe box
+            volume_function (VolumeFunction): The function to compute the current safe box volume
+            device (str): The device to use for training ('cpu' or 'cuda').
+        """
         super().__init__()
         self.volume_threshold = volume_threshold
         self.volume_function = volume_function
@@ -92,6 +149,15 @@ class VolumeConstrainedIntervalMinimizer(cooper.ConstrainedMinimizationProblem):
         )
 
     def compute_cmp_state(self, model, loss) -> cooper.CMPState:
+        """Computes the constraint state for the current model and loss.
+
+        Args:
+            model: The interval model.
+            loss: The current loss value.
+
+        Returns:
+            cooper.CMPState: The constraint minimization problem state.
+        """
         volume: torch.Tensor = self.volume_function.compute_volume(model)
         volume_constraint_state = cooper.ConstraintState(violation=-(volume - self.volume_threshold))
         observed_constraints = {self.volume_constraint: volume_constraint_state}
